@@ -1,29 +1,61 @@
-name: Maven Package
+name: Release Java Agent
 
 on:
   release:
-    types: [ created ]
+    types: [ created, edited ]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    if: github.repository == 'HXSecurity/DongTai-agent-java'
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - uses: actions/checkout@v2
-      - name: Set up JDK 1.6
-        uses: actions/setup-java@v2
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
         with:
-          java-version: '1.6'
-          distribution: 'adopt'
+          java-version: 1.8
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v4
+        with:
+          maven-version: 3.2.5
 
-      - name: Build with Maven
-        run: mvn clean -B package --file pom.xml
+      - id: release
+        run: |
+          TAG_NAME=${{ github.event.release.tag_name }}
+          ID=`echo ${TAG_NAME##v}`
+          echo "::set-output name=VERSION::$ID"
 
-#      - name: Publish to GitHub Packages Apache Maven
-#        run: mvn deploy -s $GITHUB_WORKSPACE/settings.xml
-#        env:
-#          GITHUB_TOKEN: ${{ github.token }}
+      - name: Build and Publish Maven Package
+        run: |
+          bash .github/workflows/scripts/version_update.sh "${{ steps.release.outputs.VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate version file
+        run: |
+          cd ${{ github.workspace }}/dongtai-agent/src/main/resources/bin/ && \
+          echo "${{ github.event.repository.name }},version,${{ steps.release.outputs.VERSION }}" >> version.txt && \
+          echo "${{ github.event.repository.name }},commit_hash,${GITHUB_SHA}" >> version.txt && \
+          files=('dongtai-core.jar') && \
+          for FILE in ${files[@]};do FILE_HASH=`sha256sum ${FILE} | awk '{print $1}'`; echo "${{ github.event.repository.name }},${FILE},${FILE_HASH}" >> version.txt; done \
+
+      - uses: manyuanrong/setup-ossutil@v2.0
+        with:
+          endpoint: "oss-cn-beijing.aliyuncs.com"
+          access-key-id: ${{ secrets.OSS_KEY_ID }}
+          access-key-secret: ${{ secrets.OSS_KEY_SECRET }}
+
+      - run: |
+          cd ${{ github.workspace }}/dongtai-agent/src/main/resources/bin/ && \
+          ossutil cp version.txt oss://huoqi-public/iast/release-version/${{ github.event.repository.name }}/${{ steps.release.outputs.VERSION }}/version.txt
+
+      - run: |
+          ossutil cp -rf dongtai-agent/target/dongtai-agent.jar oss://dongtai/agent/java/${{ steps.release.outputs.VERSION }}/dongtai-agent.jar --meta x-oss-object-acl:public-read
+          ossutil cp -rf dongtai-agent/src/main/resources/bin/ oss://dongtai/agent/java/${{ steps.release.outputs.VERSION }}/ --meta x-oss-object-acl:public-read
+
+          ossutil cp -rf dongtai-agent/target/dongtai-agent.jar oss://dongtai/agent/java/latest/dongtai-agent.jar --meta x-oss-object-acl:public-read
+          ossutil cp -rf dongtai-agent/src/main/resources/bin/ oss://dongtai/agent/java/latest/ --meta x-oss-object-acl:public-read

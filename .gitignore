@@ -1,16 +1,19 @@
 ## for IDEA
 .idea
 .idea/*
+.fleet
 *.iml
 *.DS_Store
 
 ## for maven
 pom.xml.versionsBackup
-iast-core/target/
-iast-inject/target/
-iast-agent/target/
+dongtai-core/target/
+dongtai-spy/target/
+dongtai-agent/target/
 UnitText/target/
 target/
+**/dependency-reduced-pom.xml
+.flattened-pom.xml
 
 ## for eclipse and vscode
 .classpath
@@ -29,5 +32,11 @@ release
 # for jenv
 .java-version
 
+jmh-result.json
+
+dongtai-api.jar
+dongtai-core.jar
+dongtai-grpc.jar
+dongtai-spy.jar
 
 logs
